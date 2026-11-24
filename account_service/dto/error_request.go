@@ -5,6 +5,6 @@ import (
 )
 
 type ErrorDto struct{
-	Message string `json: message`
-	MessageTime time.Time `json: time`
+	Message string `json:"message"`
+	MessageTime time.Time `json:"time"`
 }
