@@ -65,6 +65,46 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
     restart: "no"
 
+  # ---------- Сервисы ----------
+  account-service:
+    build: ./account_service
+    container_name: bank-account-service
+    restart: on-failure
+    env_file:
+      - path: ./account_service/.env
+        required: false   # .env не в git; без него берутся значения ниже
+    environment:
+      HTTP_PORT: 8080
+      DB_HOST: account-db
+      DB_PORT: 5432
+      DB_NAME: ${ACCOUNT_DB_NAME:-account_db}
+      DB_USER: ${ACCOUNT_DB_USER:-account_svc}
+      DB_PASSWORD: ${ACCOUNT_DB_PASSWORD:-account_pass}
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: account.events
+    ports:
+      - "${ACCOUNT_SERVICE_PORT:-8080}:8080"
+    depends_on:
+      account-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  notification-service:
+    build: ./notification_service
+    container_name: bank-notification-service
+    restart: on-failure
+    env_file:
+      - path: ./notification_service/.env
+        required: false   # .env не в git; без него берутся значения ниже
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: account.events
+      KAFKA_GROUP_ID: notification-service
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+
 volumes:
   account-db-data:
   kafka-data:

@@ -1,0 +1,40 @@
+# ---------- Секреты и локальные настройки ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Go ----------
+# собранные бинарники
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+# покрытие и профили
+*.out
+coverage.*
+*.prof
+# зависимости (если когда-нибудь будет go mod vendor)
+vendor/
+# go.work коммитим, а его sum — локальный
+go.work.sum
+
+# ---------- IDE ----------
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# ---------- ОС ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Прочее ----------
+*.log
+tmp/
