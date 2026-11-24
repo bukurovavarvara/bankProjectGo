@@ -1,0 +1,273 @@
+openapi: 3.0.3
+info:
+  title: Account Service API
+  version: 1.0.0
+  description: |
+    API сервиса счетов bankProjectGo: открытие счёта, баланс, переводы между
+    счетами и история операций. Схемы соответствуют DTO из `account_service/dto`.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Локальный запуск
+
+tags:
+  - name: accounts
+    description: Счета
+  - name: transactions
+    description: Переводы
+
+paths:
+  /accounts:
+    post:
+      tags: [accounts]
+      operationId: createAccount
+      summary: Открыть счёт
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Счёт создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAccountResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /accounts/{id}/balance:
+    get:
+      tags: [accounts]
+      operationId: getBalance
+      summary: Получить баланс счёта
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Текущий баланс
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetBalanceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /accounts/{id}/transactions:
+    get:
+      tags: [transactions]
+      operationId: getHistory
+      summary: История переводов по счёту
+      description: Входящие и исходящие переводы счёта, новые первыми.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Список переводов (может быть пустым)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionHistoryItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /transactions:
+    post:
+      tags: [transactions]
+      operationId: createTransaction
+      summary: Перевести деньги между счетами
+      description: |
+        Создаёт перевод в статусе PENDING. Итоговый статус (COMPLETED / FAILED)
+        можно увидеть в истории операций.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Перевод создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTransactionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Перевод невозможен (недостаточно средств, перевод самому себе и т.п.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    AccountIdPath:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор счёта
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Currency:
+      type: string
+      description: Код валюты ISO 4217
+      pattern: '^[A-Z]{3}$'
+      example: USD
+
+    Money:
+      type: number
+      format: double
+      description: Денежная сумма, до 4 знаков после запятой
+      example: 150.50
+
+    TransactionStatus:
+      type: string
+      enum: [PENDING, COMPLETED, FAILED]
+
+    # dto.CreateAccountDtoRq
+    CreateAccountRequest:
+      type: object
+      required: [accountHolder, currency]
+      properties:
+        accountHolder:
+          type: string
+          maxLength: 100
+          example: Иван Иванов
+        currency:
+          $ref: '#/components/schemas/Currency'
+
+    # dto.CreateAccountDtoRs
+    CreateAccountResponse:
+      type: object
+      required: [id, accountHolder, balance, currency]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountHolder:
+          type: string
+          example: Иван Иванов
+        balance:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          example: 0
+        currency:
+          $ref: '#/components/schemas/Currency'
+
+    # dto.GetBalanceDtoRs (dto.GetBalanceDtoRq.id передаётся в пути)
+    GetBalanceResponse:
+      type: object
+      required: [balance]
+      properties:
+        balance:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          minimum: 0
+
+    # dto.CreateTransactionDtoRq
+    CreateTransactionRequest:
+      type: object
+      required: [fromAccount, toAccount, amount]
+      properties:
+        fromAccount:
+          type: string
+          format: uuid
+          description: Счёт списания
+        toAccount:
+          type: string
+          format: uuid
+          description: Счёт зачисления, не совпадает с fromAccount
+        amount:
+          allOf:
+            - $ref: '#/components/schemas/Money'
+          description: Сумма перевода, больше 0
+          exclusiveMinimum: true
+          minimum: 0
+
+    # dto.CreateTransactionDtoRs
+    CreateTransactionResponse:
+      type: object
+      required: [transactionId, status]
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/TransactionStatus'
+
+    # dto.GetHistoryDtoRs (dto.GetHistoryDtoRq.accountId передаётся в пути)
+    TransactionHistoryItem:
+      type: object
+      required: [transactionId, fromAccount, toAccount, amount, timestamp, status]
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        fromAccount:
+          type: string
+          format: uuid
+        toAccount:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-11-24T19:15:00Z'
+        status:
+          $ref: '#/components/schemas/TransactionStatus'
+
+    # dto.ErrorDto
+    Error:
+      type: object
+      required: [message, time]
+      properties:
+        message:
+          type: string
+          example: account not found
+        time:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос (невалидный JSON, UUID, валюта, сумма)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Счёт не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Внутренняя ошибка сервиса
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
